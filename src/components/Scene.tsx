@@ -61,8 +61,11 @@ export default function Scene({ segments, geometry: g, left, right, selected, bu
   const leftLevel = profile.edges[0]?.left ?? 0;
   const rightLevel = profile.edges[profile.edges.length - 1]?.right ?? 0;
   const variables = { "--profile-depth": `${profile.baseDepth}px`, "--label-depth": `${LABEL_BAND_PX}px` } as CSSProperties;
+  // ?debug=layout overlays every segment's computed bounds (magenta) and every
+  // artwork's box (cyan) so tiling vs. artwork overflow can be told apart.
+  const debugLayout = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "layout";
   return (
-    <div className="street-scene" style={{ width: g.rowW, minWidth: g.rowW, ...variables }} data-ppm={g.ppm}>
+    <div className={`street-scene${debugLayout ? " debug-layout" : ""}`} style={{ width: g.rowW, minWidth: g.rowW, ...variables }} data-ppm={g.ppm}>
       <div className="scene-sky" data-env={environment} onClick={onDeselect} aria-hidden="true">
         <Clouds w={g.rowW} h={155} environment={environment} />
       </div>
@@ -162,6 +165,18 @@ export default function Scene({ segments, geometry: g, left, right, selected, bu
             );
           })}
         </div>
+
+        {debugLayout && segments.map((segment, di) => (
+          <div
+            key={`debug-${segment.id}`}
+            className="debug-segment-box"
+            style={{ left: g.offsets[di], width: segment.w * g.ppm }}
+            aria-hidden="true"
+          >
+            <span>#{di} {segment.w.toFixed(2)} m</span>
+            <span>off {Math.round(g.offsets[di])} px</span>
+          </div>
+        ))}
 
         {drag?.target != null && <div className="insertion-line" style={{ left: g.offsets[drag.target] ?? g.streetW }} aria-hidden="true" />}
 

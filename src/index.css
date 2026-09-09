@@ -220,6 +220,9 @@ button, input, select, summary, a { -webkit-tap-highlight-color: transparent; }
 .cycle-buffer.right { left: auto; right: 0; border-right: 0; border-left: 3px solid #e8eee4; }
 .drainage-section { display: block; position: absolute; top: 0; left: 8%; right: 8%; height: 80%; background: #8aa6a6; border: 5px solid #d4d0c7; border-top: 0; clip-path: polygon(0 0, 100% 0, 80% 100%, 20% 100%); }
 .insertion-line { position: absolute; top: -15px; bottom: var(--label-depth); z-index: 15; width: 4px; margin-left: -2px; background: #f4c74c; box-shadow: 0 0 0 1px #87621677; pointer-events: none; }
+/* ?debug=layout: magenta = computed segment bounds, cyan = artwork boxes. */
+.debug-layout .street-object, .debug-layout .groundcover-object { outline: 2px solid #00c8ff; outline-offset: -2px; }
+.debug-segment-box { position: absolute; bottom: var(--label-depth); height: calc(var(--profile-depth, 46px) + 80px); z-index: 60; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; gap: 1px; padding-top: 2px; border: 1px dashed #ff00ff; background: rgba(255,0,255,.05); color: #fff; font-size: 9px; line-height: 1.25; text-shadow: 0 1px 2px #000, 0 0 3px #000; pointer-events: none; overflow: hidden; white-space: nowrap; }
 .insertion-line::before { content: ""; position: absolute; left: -4px; top: 0; width: 12px; height: 12px; background: #f4c74c; transform: rotate(45deg); }
 .segment-labels { display: flex; height: var(--label-depth); border-top: 1px solid #5f635b; }
 .segment-label { display: flex; flex: 0 0 auto; flex-direction: column; align-items: center; gap: 3px; position: relative; border: 0; border-left: 1px solid #9c9e9266; background: #e5e1d9; padding: 0 1px; min-width: 0; overflow: hidden; text-align: center; cursor: grab; touch-action: none; }

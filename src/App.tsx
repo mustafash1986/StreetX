@@ -23,9 +23,14 @@ interface DragSession {
   startX: number;
   startY: number;
   startWidth?: number;
-  startLevelStart?: number;
-  startLevelEnd?: number;
-  startSlope?: number;
+  // Left-edge resize moves the shared boundary with the previous segment, so
+  // the neighbour's width is tracked alongside (total street width is kept).
+  neighborId?: string | null;
+  startNeighborWidth?: number;
+  // Last committed widths during a resize drag. Compared to detect change —
+  // never mutate `session.segment` (it aliases live editor state and undo).
+  lastWidth?: number;
+  lastNeighborWidth?: number;
   pointerId: number;
   pointerType: string;
   active: boolean;
@@ -89,14 +94,19 @@ export default function App() {
     document.title = `${street.name} — Streetx`;
   }, [street]);
 
+  // Observe the viewport for the life of the component, but only centre the
+  // camera on first mount. Re-centring on every street edit yanks the scroll
+  // position while the user is resizing, typing widths, or adding segments.
   useLayoutEffect(() => {
     const element = viewer.current;
     if (!element) return;
     const observer = new ResizeObserver(() => setViewportWidth(element.clientWidth));
     observer.observe(element);
+    setViewportWidth(element.clientWidth);
     element.scrollLeft = Math.max(0, geometry.origin + geometry.streetW / 2 - element.clientWidth / 2);
     return () => observer.disconnect();
-  }, [geometry.origin, geometry.streetW]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useLayoutEffect(() => {
     if (desiredCameraCenter.current === null || !viewer.current) return;
