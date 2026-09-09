@@ -223,6 +223,8 @@ export default function App() {
 
   const startDrag = (mode: "move" | "add", segment: Segment, event: ReactPointerEvent<HTMLButtonElement>) => {
     if (event.button !== 0 || !event.isPrimary) return;
+    // Resize grips sit inside the bay button: never start a move-drag from them.
+    if ((event.target as HTMLElement | null)?.closest?.(".segment-edge-resize")) return;
     dragSession.current = {
       mode,
       segment,
@@ -242,23 +244,20 @@ export default function App() {
     }
   };
 
-  const startResize = (segment: Segment, edge: "left" | "right", event: ReactPointerEvent<HTMLDivElement>) => {
+  const startResize = (segment: Segment, edge: "left" | "right", event: ReactPointerEvent<HTMLSpanElement>) => {
     if (event.button !== 0 || !event.isPrimary) return;
     event.preventDefault();
     event.stopPropagation();
-    const index = street.segments.findIndex((entry) => entry.id === segment.id);
-    const neighbor = edge === "left" && index > 0 ? street.segments[index - 1] : null;
+    setSelected(segment.id);
+    setBuildingSelected(null);
+    dismissWelcome();
     dragSession.current = {
       mode: "resize",
-      segment,
+      segment: { ...segment },
       edge,
       startX: event.clientX,
       startY: event.clientY,
       startWidth: segment.w,
-      neighborId: neighbor?.id ?? null,
-      startNeighborWidth: neighbor?.w,
-      lastWidth: segment.w,
-      lastNeighborWidth: neighbor?.w,
       pointerId: event.pointerId,
       pointerType: event.pointerType,
       active: false,
@@ -278,8 +277,9 @@ export default function App() {
     const dx = event.clientX - session.startX;
     const dy = event.clientY - session.startY;
 
-    // Interactive segment width resizing
+    // Interactive segment width resizing — one edge, one bay, live.
     if (session.mode === "resize" && session.edge && session.startWidth !== undefined) {
+      if (!session.active && Math.hypot(dx, dy) < 3) return;
       session.active = true;
       event.preventDefault();
       const rect = node.getBoundingClientRect();
@@ -287,59 +287,21 @@ export default function App() {
         if (event.clientX < rect.left + 32) node.scrollLeft -= 18;
         if (event.clientX > rect.right - 32) node.scrollLeft += 18;
       }
-      const quantize = (value: number) => Number((Math.round(value * 10) / 10).toFixed(1));
-      // A quantized width must never dip below its minimum: round the minimum
-      // itself *up* to the next tenth when clamping.
-      const fitMinimum = (quantized: number, minimum: number) =>
-        quantized < minimum ? Math.ceil(minimum * 10 - 1e-6) / 10 : quantized;
+      // Right edge: drag right to widen. Left edge: drag left to widen.
+      const deltaMeters = ((session.edge === "right" ? 1 : -1) * dx) / geometry.ppm;
+      const current = street.segments.find((s) => s.id === session.segment.id) ?? session.segment;
+      const minW = minimumWidth(current, street.segments);
+      let newWidth = session.startWidth + deltaMeters;
+      if (newWidth < minW) newWidth = minW;
+      if (newWidth > 30) newWidth = 30;
+      // Quantize to 0.01 m so motion is smooth but stable (no jitter).
+      newWidth = Math.round(newWidth * 100) / 100;
 
-      if (session.edge === "left" && session.neighborId && session.startNeighborWidth !== undefined) {
-        // Left-edge drag moves the shared boundary with the previous segment:
-        // dragging left grows this segment out of the neighbour (dragging
-        // right gives space back), so the edge under the cursor is the edge
-        // that moves. Total street width stays constant.
-        const self = street.segments.find((entry) => entry.id === session.segment.id);
-        const neighbor = street.segments.find((entry) => entry.id === session.neighborId);
-        if (!self || !neighbor) return;
-        const minSelf = minimumWidth(self, street.segments);
-        const minNeighbor = minimumWidth(neighbor, street.segments);
-        const rawSelf = Math.min(30, Math.max(minSelf, session.startWidth - dx / geometry.ppm));
-        let delta = rawSelf - session.startWidth;
-        // Limit the transfer to what the neighbour can give or take.
-        const maxGrow = Math.max(0, session.startNeighborWidth - minNeighbor);
-        const maxShrink = Math.max(0, 30 - session.startNeighborWidth);
-        delta = Math.min(Math.max(delta, -maxShrink), maxGrow);
-        const selfWidth = fitMinimum(quantize(session.startWidth + delta), minSelf);
-        const neighborWidth = fitMinimum(quantize(session.startNeighborWidth - delta), minNeighbor);
-        if (selfWidth !== session.lastWidth || neighborWidth !== session.lastNeighborWidth) {
-          const segments = street.segments.map((entry) => {
-            if (entry.id === self.id) return { ...entry, w: selfWidth };
-            if (entry.id === neighbor.id) return { ...entry, w: neighborWidth };
-            return entry;
-          });
-          // Edge levels are untouched, so normalizeSegments re-derives each
-          // slope from the same levels and the new widths.
-          commit({ ...street, segments: normalizeSegments(segments) });
-          session.lastWidth = selfWidth;
-          session.lastNeighborWidth = neighborWidth;
-        }
-      } else {
-        // Right-edge drag resizes this segment and shifts everything to its
-        // right, changing total street width.
-        const self = street.segments.find((entry) => entry.id === session.segment.id);
-        const minWidth = minimumWidth(self ?? session.segment, street.segments);
-        const deltaMeters = ((session.edge === "right" ? 1 : -1) * dx) / geometry.ppm;
-        const newWidth = fitMinimum(
-          quantize(Math.min(30, Math.max(minWidth, session.startWidth + deltaMeters))),
-          minWidth
-        );
-        if (newWidth !== session.lastWidth) {
-          const segments = street.segments.map((entry) =>
-            entry.id === session.segment.id ? { ...entry, w: newWidth } : entry
-          );
-          commit({ ...street, segments: normalizeSegments(segments) });
-          session.lastWidth = newWidth;
-        }
+      if (newWidth !== current.w) {
+        // Edge levels stay fixed; normalizeSegments re-derives slope % from them.
+        const segments = street.segments.map((s) => (s.id === session.segment.id ? { ...s, w: newWidth } : s));
+        commit({ ...street, segments: normalizeSegments(segments) });
+        session.segment = { ...session.segment, w: newWidth };
       }
       setDrag({ mode: "resize", segment: session.segment, x: event.clientX, y: event.clientY, target: null });
       return;

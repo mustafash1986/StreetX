@@ -469,17 +469,19 @@ button, input, select, summary, a { -webkit-tap-highlight-color: transparent; }
 
 /* Real sloped polygons, not tilted caps over a flat black rectangle. */
 .profile-surfaces { position: relative; background: none; overflow: visible; }
-.profile-surface { position: absolute; bottom: 0; border: 0; padding: 0; border-radius: 0; overflow: visible; color: #f8f7ef; touch-action: none; cursor: grab; }
+.profile-surface { position: absolute; bottom: 0; border: 0; padding: 0; border-radius: 0; overflow: visible; color: #f8f7ef; background: transparent; touch-action: none; cursor: grab; }
 .profile-surface:active { cursor: grabbing; }
-/* Interactive Edge Resizing — native left/right bay width grips */
-.segment-edge-resize { position: absolute; top: 0; bottom: 0; width: 14px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.15s ease, background 0.15s ease; z-index: 6; cursor: col-resize; border-left: 1px solid rgba(255, 255, 255, 0.9); border-right: 1px solid rgba(255, 255, 255, 0.9); }
-.segment-edge-resize.edge-left { left: -7px; }
-.segment-edge-resize.edge-right { right: -7px; }
-.segment-edge-resize:hover { opacity: 1 !important; background: rgba(27, 153, 175, 0.25); backdrop-filter: blur(1px); }
-.profile-surface:hover .segment-edge-resize { opacity: 1; }
-.segment-edge-resize .edge-resize-grip { font-size: 9px; font-weight: 700; color: #ffffff; background: #258ba2; border-radius: 50%; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgba(0,0,0,0.2); text-shadow: none; margin-top: -2px; pointer-events: none; line-height: 1; }
-.profile-surface.is-resizing-applying, .profile-surface.is-resizing-applying .native-art, .profile-surface.is-resizing-applying .profile-symbol { pointer-events: none; opacity: 0.8; }
-.profile-surface.is-resizing-applying { outline: 2px solid #f4c74c !important; outline-offset: -1px; z-index: 5; }
+/* The clipped slope silhouette lives on an inner fill so edge grips (siblings) are never clipped away */
+.surface-fill { position: absolute; inset: 0; display: block; overflow: hidden; }
+/* Interactive Edge Resizing — grips sit fully INSIDE their own bay so a neighbour can never steal the grab */
+.segment-edge-resize { position: absolute; top: 0; bottom: 0; width: 11px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.15s ease, background 0.15s ease; z-index: 6; cursor: col-resize; touch-action: none; }
+.segment-edge-resize.edge-left { left: 0; }
+.segment-edge-resize.edge-right { right: 0; }
+.segment-edge-resize:hover { opacity: 1 !important; background: rgba(27, 153, 175, 0.28); }
+.profile-surface:hover .segment-edge-resize, .profile-surface.is-selected .segment-edge-resize { opacity: 1; }
+.segment-edge-resize .edge-resize-grip { font-size: 9px; font-weight: 700; color: #ffffff; background: #258ba2; border-radius: 50%; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgba(0,0,0,0.2); pointer-events: none; line-height: 1; }
+.profile-surface.is-resizing { z-index: 5; }
+.profile-surface.is-resizing .surface-fill { outline: 2px solid #f4c74c; outline-offset: -2px; }
 .profile-symbol { position: absolute; height: 28px; left: 0; }
 .profile-outline { position: absolute; top: 0; left: 0; pointer-events: none; max-width: none; }
 .surface-top-edge { stroke: #e5ebe04d; stroke-width: 2; }

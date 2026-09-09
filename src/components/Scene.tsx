@@ -30,7 +30,7 @@ export interface SceneProps {
   environment?: EnvironmentTheme;
   drag: DragUi | null;
   onPointerDown: (segment: Segment, event: PointerEvent<HTMLButtonElement>) => void;
-  onResizeStart: (segment: Segment, edge: "left" | "right", event: PointerEvent<HTMLDivElement>) => void;
+  onResizeStart: (segment: Segment, edge: "left" | "right", event: PointerEvent<HTMLSpanElement>) => void;
   onSelect: (id: string) => void;
   onSelectBuilding: (side: "left" | "right") => void;
   onDeselect: () => void;
@@ -109,53 +109,58 @@ export default function Scene({ segments, geometry: g, left, right, selected, bu
             const symbolPadding = def.layout === "loading"
               ? { [segment.side === "left" ? "paddingLeft" : "paddingRight"]: 1.53 * g.ppm }
               : protectedLane ? { paddingLeft: buffers.left * g.ppm, paddingRight: buffers.right * g.ppm } : {};
+            const isResizing = drag?.mode === "resize" && drag.segment?.id === segment.id;
+            // Ambiguous 12 px grab zones overlap inside narrow bays (< ~30 px):
+            // show only the right handle there; never render grips in tiny
+            // curbs/dividers at all.
+            const showHandles = polygon.width >= 16;
+            const showLeftHandle = polygon.width >= 28;
             return (
               <button
                 key={segment.id}
-                className={`profile-surface surface-${surface} ${selected === segment.id ? "is-selected" : ""} ${drag?.segment?.id === segment.id && drag.mode === "move" ? "drag-source" : ""}`}
-                style={{ left: g.offsets[index], width: polygon.width, height: polygon.height, clipPath: polygon.clipPath }}
+                className={`profile-surface ${selected === segment.id ? "is-selected" : ""} ${isResizing ? "is-resizing" : ""} ${drag?.segment?.id === segment.id && drag.mode === "move" ? "drag-source" : ""}`}
+                style={{ left: g.offsets[index], width: polygon.width, height: polygon.height }}
                 onPointerDown={(event) => onPointerDown(segment, event)}
                 onClick={() => onSelect(segment.id)}
                 aria-pressed={selected === segment.id}
                 aria-label={`${def.label}, ${formatMetres(segment.w)} metres wide. ${levelDescription(segment)}`}
                 data-surface={segment.id} data-left-level={profile.edges[index].left} data-right-level={profile.edges[index].right}
               >
-                {def.layout === "loading" && <span className={`access-aisle ${segment.side}`} style={{ width: 1.53 * g.ppm }}><Accessibility size={16} /></span>}
-                {protectedLane && buffers.left > 0 && <span className="cycle-buffer" style={{ width: buffers.left * g.ppm }} />}
-                {protectedLane && buffers.right > 0 && <span className="cycle-buffer right" style={{ width: buffers.right * g.ppm }} />}
-                {def.layout === "drainage" && <span className="drainage-section" />}
-                <span className={`lane-symbol profile-symbol ${def.surface === "walk" ? "on-sidewalk" : ""}`} style={{ top: centreInset + 8, ...symbolPadding }}>
-                  <LaneSymbol marking={def.marking} segment={segment} />
+                <span className={`surface-fill surface-${surface}`} style={{ clipPath: polygon.clipPath }} aria-hidden="true">
+                  {def.layout === "loading" && <span className={`access-aisle ${segment.side}`} style={{ width: 1.53 * g.ppm }}><Accessibility size={16} /></span>}
+                  {protectedLane && buffers.left > 0 && <span className="cycle-buffer" style={{ width: buffers.left * g.ppm }} />}
+                  {protectedLane && buffers.right > 0 && <span className="cycle-buffer right" style={{ width: buffers.right * g.ppm }} />}
+                  {def.layout === "drainage" && <span className="drainage-section" />}
+                  <span className={`lane-symbol profile-symbol ${def.surface === "walk" ? "on-sidewalk" : ""}`} style={{ top: centreInset + 8, ...symbolPadding }}>
+                    <LaneSymbol marking={def.marking} segment={segment} />
+                  </span>
+                  <svg className="profile-outline" width={polygon.width} height={polygon.height} viewBox={`0 0 ${polygon.width} ${polygon.height}`} aria-hidden="true">
+                    {def.surface === "planting" && <path d={`M0 ${polygon.leftInset}L${polygon.width} ${polygon.rightInset}v6L0 ${polygon.leftInset + 6}Z`} fill="#72624d" />}
+                    <path className="surface-top-edge" d={`M0 ${polygon.leftInset}L${polygon.width} ${polygon.rightInset}`} fill="none" />
+                    <path className="surface-selection-edge" d={`M0 ${polygon.leftInset}L${polygon.width} ${polygon.rightInset}V${polygon.height}H0Z`} fill="none" />
+                  </svg>
                 </span>
-                <svg className="profile-outline" width={polygon.width} height={polygon.height} viewBox={`0 0 ${polygon.width} ${polygon.height}`} aria-hidden="true">
-                  {def.surface === "planting" && <path d={`M0 ${polygon.leftInset}L${polygon.width} ${polygon.rightInset}v6L0 ${polygon.leftInset + 6}Z`} fill="#72624d" />}
-                  <path className="surface-top-edge" d={`M0 ${polygon.leftInset}L${polygon.width} ${polygon.rightInset}`} fill="none" />
-                  <path className="surface-selection-edge" d={`M0 ${polygon.leftInset}L${polygon.width} ${polygon.rightInset}V${polygon.height}H0Z`} fill="none" />
-                </svg>
-                {/* Left / Right Edge Resize Handles.
-                    The left grip moves the shared boundary with the previous
-                    segment (total width kept); the first segment has no left
-                    neighbour, so it only gets the right grip. */}
-                {index > 0 && (
-                  <div
+                {/* Edge resize grips live fully INSIDE this bay so neighbours never steal the grab */}
+                {showHandles && showLeftHandle && (
+                  <span
                     className="segment-edge-resize edge-left"
-                    aria-label={`Drag to move the boundary between ${def.label} and the previous segment`}
-                    title="Drag to move the shared boundary with the previous segment"
+                    title={`Drag to resize ${def.label} (left edge)`}
                     onPointerDown={(event) => onResizeStart(segment, "left", event)}
                     onClick={(event) => event.stopPropagation()}
                   >
                     <span className="edge-resize-grip" aria-hidden="true">⇔</span>
-                  </div>
+                  </span>
                 )}
-                <div
-                  className="segment-edge-resize edge-right"
-                  aria-label={`Drag to resize ${def.label} right edge`}
-                  title={`Drag to resize ${def.label} (shifts segments to the right)`}
-                  onPointerDown={(event) => onResizeStart(segment, "right", event)}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <span className="edge-resize-grip" aria-hidden="true">⇔</span>
-                </div>
+                {showHandles && (
+                  <span
+                    className="segment-edge-resize edge-right"
+                    title={`Drag to resize ${def.label} (right edge)`}
+                    onPointerDown={(event) => onResizeStart(segment, "right", event)}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <span className="edge-resize-grip" aria-hidden="true">⇔</span>
+                  </span>
+                )}
               </button>
             );
           })}
