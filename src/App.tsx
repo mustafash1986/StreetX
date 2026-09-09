@@ -213,6 +213,8 @@ export default function App() {
 
   const startDrag = (mode: "move" | "add", segment: Segment, event: ReactPointerEvent<HTMLButtonElement>) => {
     if (event.button !== 0 || !event.isPrimary) return;
+    // Resize grips sit inside the bay button: never start a move-drag from them.
+    if ((event.target as HTMLElement | null)?.closest?.(".segment-edge-resize")) return;
     dragSession.current = {
       mode,
       segment,
@@ -232,20 +234,20 @@ export default function App() {
     }
   };
 
-  const startResize = (segment: Segment, edge: "left" | "right", event: ReactPointerEvent<HTMLDivElement>) => {
+  const startResize = (segment: Segment, edge: "left" | "right", event: ReactPointerEvent<HTMLSpanElement>) => {
     if (event.button !== 0 || !event.isPrimary) return;
     event.preventDefault();
     event.stopPropagation();
+    setSelected(segment.id);
+    setBuildingSelected(null);
+    dismissWelcome();
     dragSession.current = {
       mode: "resize",
-      segment,
+      segment: { ...segment },
       edge,
       startX: event.clientX,
       startY: event.clientY,
       startWidth: segment.w,
-      startLevelStart: segment.levelStart,
-      startLevelEnd: segment.levelEnd,
-      startSlope: segment.slope,
       pointerId: event.pointerId,
       pointerType: event.pointerType,
       active: false,
@@ -265,8 +267,9 @@ export default function App() {
     const dx = event.clientX - session.startX;
     const dy = event.clientY - session.startY;
 
-    // Interactive segment width resizing
+    // Interactive segment width resizing — one edge, one bay, live.
     if (session.mode === "resize" && session.edge && session.startWidth !== undefined) {
+      if (!session.active && Math.hypot(dx, dy) < 3) return;
       session.active = true;
       event.preventDefault();
       const rect = node.getBoundingClientRect();
@@ -274,32 +277,21 @@ export default function App() {
         if (event.clientX < rect.left + 32) node.scrollLeft -= 18;
         if (event.clientX > rect.right - 32) node.scrollLeft += 18;
       }
+      // Right edge: drag right to widen. Left edge: drag left to widen.
       const deltaMeters = ((session.edge === "right" ? 1 : -1) * dx) / geometry.ppm;
+      const current = street.segments.find((s) => s.id === session.segment.id) ?? session.segment;
+      const minW = minimumWidth(current, street.segments);
       let newWidth = session.startWidth + deltaMeters;
-
-      // Clamp against minimum and maximum in steps of 0.1m
-      const minWidth = minimumWidth(session.segment, street.segments);
-      if (newWidth < minWidth) newWidth = minWidth;
+      if (newWidth < minW) newWidth = minW;
       if (newWidth > 30) newWidth = 30;
+      // Quantize to 0.01 m so motion is smooth but stable (no jitter).
+      newWidth = Math.round(newWidth * 100) / 100;
 
-      // Quantize to 0.1m with a small dead-zone tolerance so width doesn't jitter
-      newWidth = Number((Math.round(newWidth * 10) / 10).toFixed(1));
-
-      if (newWidth !== session.segment.w) {
-        const segments = street.segments.map((s) => {
-          if (s.id !== session.segment.id) return s;
-          const next = { ...s, w: newWidth };
-          // Preserve slopes from the pixel-exact edge levels we have on file
-          // so adjusting width adjusts slope % automatically
-          const p1 = session.startLevelStart ?? s.levelStart;
-          const p2 = session.startLevelEnd ?? s.levelEnd;
-          const slope = ((p2 - p1) / Math.max(newWidth, 0.001)) * 100;
-          next.slope = Math.round(slope * 100) / 100;
-          return next;
-        });
+      if (newWidth !== current.w) {
+        // Edge levels stay fixed; normalizeSegments re-derives slope % from them.
+        const segments = street.segments.map((s) => (s.id === session.segment.id ? { ...s, w: newWidth } : s));
         commit({ ...street, segments: normalizeSegments(segments) });
-        // Update the local visualization of the drag state smoothly
-        session.segment.w = newWidth;
+        session.segment = { ...session.segment, w: newWidth };
       }
       setDrag({ mode: "resize", segment: session.segment, x: event.clientX, y: event.clientY, target: null });
       return;
